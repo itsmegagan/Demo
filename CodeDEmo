@@ -1,0 +1,197 @@
+ublic static void manageDelete(list<Comments_Attachments__c> calist) {
+
+         set<id> attachmentids = new set<id>();
+         set<id> noteids = new set<id>();
+         set<id> contentnoteids = new set<id>();
+         set<id> contentdocumentids = new set<id>();
+         set<id> docids = new set<id>();           
+         for(Comments_Attachments__c ca : calist) {
+             if(ca.AttachmentId__c != null){
+                attachmentids.add(ca.AttachmentId__c);
+             }
+             if(ca.NoteId__c != null){
+                if(ca.NoteId__c.substring(0, 3) == '069'){
+                    contentnoteids.add(ca.NoteId__c);
+                } else {
+                noteids.add(ca.NoteId__c);
+                }
+             }
+             if(ca.DocumentId__c != null){
+                if(ca.DocumentId__c.substring(0, 3) == '069'){
+                    contentdocumentids.add(ca.DocumentId__c);
+                } else {
+                    docids.add(ca.DocumentId__c);
+                }
+             }
+         }
+         if(contentnoteids.size()>0) {
+            set<Id> deletedas = new set<Id>();
+            set<Id> liveas = new set<Id>();
+            for(ContentNote a : [select id, IsDeleted from ContentNote where Id in :contentnoteids ALL ROWS]) {
+                if(a.IsDeleted) {
+                    deletedas.add(a.id);
+                } else {
+                    liveas.add(a.id);
+                }
+            }
+
+            if(trigger.isUndelete && deletedas.size()>0) {
+                undelete [select id, IsDeleted from ContentNote where Id in :deletedas ALL ROWS];
+            } else if(trigger.isDelete && liveas.size()>0) {
+                delete [select id, IsDeleted from ContentNote where Id in :liveas];
+            }
+        }
+
+        if(contentdocumentids.size()>0) {
+            set<Id> deletedas = new set<Id>();
+            set<Id> liveas = new set<Id>();
+            for(ContentDocument a : [select id, IsDeleted from ContentDocument where Id in :contentdocumentids ALL ROWS]) {
+                if(a.IsDeleted) {
+                    deletedas.add(a.id);
+                } else {
+                    liveas.add(a.id);
+                }
+            }
+
+            if(trigger.isUndelete && deletedas.size()>0) {
+                undelete [select id, IsDeleted from ContentDocument where Id in :deletedas ALL ROWS];
+            } else if(trigger.isDelete && liveas.size()>0) {
+                delete [select id, IsDeleted from ContentDocument where Id in :liveas];
+            }
+        }
+
+         if(attachmentids.size()>0) {
+             set<Id> deletedas = new set<Id>();
+             set<Id> liveas = new set<Id>();
+             for(Attachment a : [select id, Name, IsDeleted from Attachment where Id in :attachmentids ALL ROWS]) {
+                 if(a.IsDeleted) {
+                     deletedas.add(a.id);
+                 } else {
+                     liveas.add(a.id);
+                 }
+             }
+
+             if(trigger.isUndelete && deletedas.size()>0) {
+                 undelete [select id, Name, IsDeleted from Attachment where Id in :deletedas ALL ROWS];
+             } else if(trigger.isDelete && liveas.size()>0) {
+                 delete [select id, Name, IsDeleted from Attachment where Id in :liveas];
+             }
+         }
+
+         if(noteids.size()>0) {
+             set<Id> deletedns = new set<Id>();
+             set<Id> livens = new set<Id>();
+             for(Note n : [select id, Title, IsDeleted from Note where Id in :noteids ALL ROWS]) {
+                 if(n.IsDeleted) {
+                     deletedns.add(n.id);
+                 } else {
+                     livens.add(n.id);
+                 }
+             }
+
+             if(trigger.isUndelete && deletedns.size()>0) {
+                 undelete [select id, Title, IsDeleted from Note where Id in :deletedns ALL ROWS];
+             } else if(trigger.isDelete && livens.size()>0) {
+                 delete [select id, Title, IsDeleted from Note where Id in :livens];
+             }
+
+         }
+
+         if(docids.size()>0) {
+             set<Id> deletedds = new set<Id>();
+             set<Id> liveds = new set<Id>();
+             for(Document d : [select id, Name, IsDeleted from Document where Id in :docids ALL ROWS]) {
+                 if(d.IsDeleted) {
+                     deletedds.add(d.id);
+                 } else {
+                     liveds.add(d.id);
+                 }
+             }
+
+             if(trigger.isUndelete && deletedds.size()>0) {
+                 undelete [select id, Name, IsDeleted from Document where Id in :deletedds ALL ROWS];
+             } else if(trigger.isDelete && liveds.size()>0) {
+                 delete [select id, Name, IsDeleted from Document where Id in :liveds];
+             }
+         }                  
+     }
+    
+    /********************************************************************************     
+     *  Class            :  manageUpdate
+     *  Author           :  Gagan Sharma
+     *  Created on       :  October 17th, 2022
+     *  Description      :  Class to keep standard attachments/notes in sync with cusotm attachments/notes
+     *  Change history   :
+     *  Date                Author                              Description
+     *  10/17/2022        Gagan Sharma                          Created
+     ********************************************************************************/
+
+    public static void manageUpdate(list<Comments_Attachments__c> newlist, Map<Id, Comments_Attachments__c> oldmap){
+       List<ContentNote> cnList = new List<ContentNote>();
+       List<Note> noteList = new List<Note>();
+       List<ContentVersion> cvList = new List<ContentVersion>();
+       List<Document> docList = new List<Document>();
+       Set<Id> cvIdList = new Set<Id>();
+       Map<Id,Id> cvIdMap = new Map<Id,Id>();
+       Id attachRecordTypeId = Schema.SObjectType.Comments_Attachments__c.getRecordTypeInfosByName().get('Attachment').getRecordTypeId();
+       Id commentRecordTypeId = Schema.SObjectType.Comments_Attachments__c.getRecordTypeInfosByName().get('Comment').getRecordTypeId();
+       for(Comments_Attachments__c ca : newlist){
+        cvIdList.add(ca.DocumentId__c);
+       }
+       for(ContentVersion cv : [Select Id,ContentDocumentId FROM ContentVersion Where ContentDocumentId IN: cvIdList]){
+        cvIdMap.put(cv.ContentDocumentId,cv.Id);
+       }
+        for(Comments_Attachments__c ca : newlist){
+            Comments_Attachments__c oldValue = oldmap.get(ca.Id);
+
+            if(ca.RecordTypeId == commentRecordTypeId){
+                if(String.valueOf(Id.valueOf(ca.NoteId__c).getsobjecttype())=='ContentDocument'){
+                    contentNote cn = new contentNote();
+                    cn.Id = ca.NoteId__c;
+                    cn.Title = ca.Name;
+                    cn.Content = Blob.valueOf(ca.Body__c.escapeHTML4());
+                    cnList.add(cn);
+                } 
+                else if (String.valueOf(Id.valueOf(ca.NoteId__c).getsobjecttype()) =='Note'){
+                    Note n = new Note();
+                    n.Id =  ca.NoteId__c;
+                    n.Title = ca.Name;
+                    n.Body  = ca.Body__c;
+                    n.IsPrivate = ca.Private__c;
+                    noteList.add(n);
+                } 
+            }
+
+            if(ca.RecordTypeId == attachRecordTypeId){
+                if(String.valueOf(Id.valueOf(ca.DocumentId__c).getsobjecttype())=='ContentDocument'){
+                    ContentVersion cv = new ContentVersion();
+                    cv.id = cvIdMap.get(ca.DocumentId__c);
+                    cv.Title = ca.Name;
+                    cv.Private__c = ca.Private__c;
+                    cv.File_Contents__c = ca.File_Contents__c;
+                    cv.Description = ca.File_Description__c;
+                    cvList.add(cv);
+                } else if (String.valueOf(Id.valueOf(ca.DocumentId__c).getsobjecttype()) =='Document'){
+                    Document doc = new Document();
+                    doc.Id = ca.DocumentId__c;
+                    doc.Name = ca.Name;
+                    doc.Description = ca.File_Description__c;
+                    doc.IsPublic = !ca.Private__c;
+                    docList.add(doc);
+                }
+            }
+        }
+        if(cnList.size()>0){
+            update cnList;
+        }
+        if(cvList.size()>0){
+            update cvList;
+        }
+        if(noteList.size()>0){
+            update noteList;
+        }
+        if(docList.size()>0){
+            update docList;
+        }
+    }
+}
